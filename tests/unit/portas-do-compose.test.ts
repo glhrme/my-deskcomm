@@ -171,6 +171,18 @@ describe("a fronteira de rede do que o cliente instala", () => {
         // (`- target: 8080`) mora sob a mesma chave, então basta achar a chave.
         if (!/^\s{4}ports:/m.test(limpo)) continue;
 
+        // Exceção deste fork, com nome e forma: o `app` publica a 3000 SÓ no
+        // override do proxy externo, SÓ nesta linha e com loopback por padrão
+        // (proxy remoto, ex.: nginx em outra máquina, declara APP_BIND_IP).
+        if (arquivo === "docker-compose.traefik.yml" && nome === "app") {
+          const trechoApp = /^\s{4}ports:\s*$\n((?:\s{6}-.*\n)+)/m.exec(limpo)?.[1] ?? "";
+          const linhasApp = [...trechoApp.matchAll(/^\s{6}-\s*"?([^"\n]+)"?\s*$/gm)].map((m) =>
+            m[1]!.trim(),
+          );
+          const permitida = "${APP_BIND_IP:-127.0.0.1}:${APP_HOST_PORT:-9091}:3000";
+          if (linhasApp.length === 1 && linhasApp[0] === permitida) continue;
+        }
+
         if ((PODE_PUBLICAR_UDP as readonly string[]).includes(nome)) {
           // A exceção não é "pode publicar": é "pode publicar UDP". Cada linha
           // da lista precisa terminar em `/udp`, e o mapeamento precisa ser
