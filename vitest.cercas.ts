@@ -45,6 +45,11 @@ const USA_DOM = /\b(?:document|window|navigator|localStorage|sessionStorage|HTML
 
 function ehModuloDeCerca(especificador: string): boolean {
   if (especificador.startsWith("node:")) return true;
+  // Um `.json` é dado puro: não importa nada e não toca DOM. Sem esta linha o
+  // catálogo de idioma (`lib/i18n/traducoes/en.json`, importado pelo leitor em
+  // `dicionario.ts`) tirava da seleção o próprio teste de i18n que motivou a
+  // regra transitiva — o `resolver` abaixo só enxerga `.ts`/`.tsx`.
+  if (especificador.endsWith(".json")) return true;
   return MODULOS_DE_CERCA.has(especificador) || BUILTINS.has(especificador);
 }
 
