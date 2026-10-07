@@ -38,6 +38,9 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: { getUser: vi.fn(async () => ({ data: { user: null } })) },
   })),
 }));
+// Sem sessão, o idioma vem do `Accept-Language` (`idiomaDoVisitante`), que lê
+// `headers()` — também só existe numa requisição. Visitante sem preferência.
+vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
 
 const MARCA: MarcaDeSaida = {
   nome: "Vendas Turbo",
