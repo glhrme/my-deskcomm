@@ -58,6 +58,13 @@ services:
     networks:
       - internal
       - proxy
+    # Proxy em OUTRA máquina (ex.: nginx numa VPS de produção apontando para
+    # IP:porta). Sem proxy local o Traefik acima nunca age; esta porta é o que
+    # o proxy remoto alcança. O padrão é loopback (não exposta): quem usa proxy
+    # remoto declara APP_BIND_IP com o IP privado da VPS e restringe a porta no
+    # firewall ao IP do proxy — o app fala HTTP puro, sem TLS.
+    ports:
+      - "${APP_BIND_IP:-127.0.0.1}:${APP_HOST_PORT:-9091}:3000"
     labels:
       traefik.enable: "true"
       # Este label diz ao Traefik em qual rede pegar o IP do contêiner. Com o
