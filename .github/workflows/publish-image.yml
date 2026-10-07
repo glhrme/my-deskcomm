@@ -344,7 +344,7 @@ jobs:
             [ -n "$tag" ] || continue
             docker buildx imagetools create \
               --tag "$tag" \
-              "${tag}-amd64" \
+              "${tag}-amd64"
           done <<< "$TAGS"
 
   # A imagem do app CONSTRÓI e MORRE ao subir? Este job existe porque isso
