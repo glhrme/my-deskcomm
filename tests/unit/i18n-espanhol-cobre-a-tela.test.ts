@@ -5,9 +5,9 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import { DICIONARIO } from "@/lib/i18n/dicionario";
-import { traduzir } from "@/lib/i18n/dicionario";
-import { IDIOMAS } from "@/lib/i18n/idiomas";
-import { IDIOMAS_EM_CONSTRUCAO } from "@/lib/i18n/registro";
+import { temTraducao, traduzir } from "@/lib/i18n/dicionario";
+import { IDIOMAS, IDIOMA_PADRAO, type Idioma } from "@/lib/i18n/idiomas";
+import { IDIOMAS_EM_CONSTRUCAO, REGISTRO_DE_IDIOMAS } from "@/lib/i18n/registro";
 
 import {
   AREAS_DE_PRODUTO,
@@ -62,10 +62,13 @@ import { arquivosDeCodigo, caminhoRelativo } from "./helpers/varrer-codigo";
  * (`PASTAS_IGNORADAS`), e o que nasce como `throw` em `lib/**` e vira
  * `t(err.message)` não é literal — issue #1046.
  *
- * ─── Só o espanhol é cobrado aqui, e é de propósito ────────────────────────
+ * ─── Só o idioma `completo` é cobrado aqui, e é de propósito ───────────────
  *
- * O nível de cada idioma mora em `lib/i18n/registro.ts`. O espanhol é
- * `completo`: toda frase de tela precisa dele, e isto reprova. Idioma
+ * O nível de cada idioma mora em `lib/i18n/registro.ts`. Espanhol e inglês são
+ * `completo`: toda frase de tela precisa deles, e isto reprova — o espanhol
+ * pelo `DICIONARIO`, o inglês pelo catálogo `traducoes/en.json`, os dois pelo
+ * mesmo `temTraducao()`. (O arquivo chama-se "espanhol" porque foi o primeiro;
+ * a lista `IDIOMAS_COMPLETOS` abaixo é lida do registro.) Idioma
  * `em_construcao` não reprova ninguém — a chave sem tradução cai no português —,
  * e as mensagens abaixo dizem isso a quem contribui, com o nome do idioma lido
  * do registro, para a frase não envelhecer.
@@ -80,9 +83,19 @@ const RAIZ = join(__dirname, "..", "..");
  */
 const EM_CONSTRUCAO =
   IDIOMAS_EM_CONSTRUCAO.map((idioma) => idioma.nomeNativo).join(", ") || "nenhum hoje";
+/**
+ * Os idiomas que o registro declara `completo` — toda frase de tela precisa
+ * deles. Hoje: espanhol (no DICIONARIO) e inglês (em traducoes/en.json). O
+ * nome do arquivo e as mensagens falam em espanhol porque foi o primeiro; a
+ * régua vale igual para qualquer idioma que o registro promova.
+ */
+const IDIOMAS_COMPLETOS: readonly Idioma[] = REGISTRO_DE_IDIOMAS.filter(
+  (idioma) => idioma.nivel === "completo" && idioma.codigo !== IDIOMA_PADRAO,
+).map((idioma) => idioma.codigo as Idioma);
 const COMO_CONSERTAR =
-  'Conserto: uma linha em lib/i18n/dicionario.ts, no formato "texto em português": { es: "texto en español" }. ' +
-  "Não fala espanhol? Mande o PR assim mesmo e diga isso na descrição. " +
+  'Conserto: uma linha em lib/i18n/dicionario.ts, no formato "texto em português": { es: "texto en español" }, ' +
+  'e uma entrada em lib/i18n/traducoes/en.json, "texto em português": "text in English". ' +
+  "Não fala espanhol ou inglês? Mande o PR assim mesmo e diga isso na descrição. " +
   `Idiomas em construção (${EM_CONSTRUCAO}) não reprovam: a frase sem tradução aparece em português. ` +
   "Confira com: pnpm test:unit tests/unit/i18n-espanhol-cobre-a-tela.test.ts";
 
@@ -483,9 +496,9 @@ describe("a chave é o texto em português, e o português não muda", () => {
     // `en-US` e nenhuma tradução existia — escolher não mudava uma letra.
     const outros = IDIOMAS.filter((i) => i !== "pt-BR");
     for (const idioma of outros) {
-      const comEsse = Object.values(DICIONARIO).filter((v) =>
-        Object.prototype.hasOwnProperty.call(v, idioma),
-      );
+      // Pelo leitor, e não pela coluna: o inglês mora no catálogo JSON, não no
+      // DICIONARIO — o que importa é que escolher o idioma muda alguma letra.
+      const comEsse = Object.keys(DICIONARIO).filter((chave) => temTraducao(chave, idioma));
       expect(
         comEsse.length,
         `o idioma "${idioma}" é oferecido mas não tem NENHUMA tradução no dicionário`,
@@ -496,12 +509,14 @@ describe("a chave é o texto em português, e o português não muda", () => {
 
 describe("toda chave usada na tela tem espanhol", () => {
   it("nenhuma chamada t() cai no português por falta de tradução", () => {
-    const semEspanhol = [...chavesUsadas().entries()]
-      .filter(([chave]) => !DICIONARIO[chave]?.es)
-      .map(([chave, onde]) => `${onde[0]} → t(${JSON.stringify(chave)})`);
+    const semEspanhol = [...chavesUsadas().entries()].flatMap(([chave, onde]) =>
+      IDIOMAS_COMPLETOS.filter((idioma) => !temTraducao(chave, idioma)).map(
+        (idioma) => `${onde[0]} → t(${JSON.stringify(chave)}) [${idioma}]`,
+      ),
+    );
     expect(
       semEspanhol,
-      `${semEspanhol.length} chamada(s) t() sem tradução em espanhol: a tela cai no português. ${COMO_CONSERTAR}`,
+      `${semEspanhol.length} chamada(s) t() sem tradução num idioma completo (${IDIOMAS_COMPLETOS.join(", ")}): a tela cai no português. ${COMO_CONSERTAR}`,
     ).toEqual([]);
   });
 });
@@ -544,8 +559,9 @@ describe("nenhuma prosa em português escapa de t()", () => {
  * nova custa a confiança dela.
  * ══════════════════════════════════════════════════════════════════════════════ */
 
-/** Só o que o dicionário promete: a coluna `es`. */
-const temEspanholNoDicionario = (chave: string): boolean => Boolean(DICIONARIO[chave]?.es);
+/** O que o produto promete: tradução em TODO idioma `completo` (espanhol e inglês hoje). */
+const temEspanholNoDicionario = (chave: string): boolean =>
+  IDIOMAS_COMPLETOS.every((idioma) => temTraducao(chave, idioma));
 
 const COMO_CONSERTAR_CHAVE_DINAMICA =
   "Conserto: uma linha em lib/i18n/dicionario.ts para CADA valor que a expressão pode assumir — " +

@@ -88,24 +88,41 @@ describe("todo catálogo de idioma", () => {
 });
 
 describe("o catálogo não viaja para o navegador antes de ser servido", () => {
-  it("nenhum código de produto importa lib/i18n/traducoes", () => {
+  /** O único leitor: `traduzir()` importa os catálogos dos idiomas que aparecem. */
+  const LEITOR = join("lib", "i18n", "dicionario.ts");
+
+  it("só o leitor importa lib/i18n/traducoes, e só catálogo de idioma que aparece", () => {
     // Um idioma em construção não é servido a ninguém. Importar o catálogo
     // numa tela poria centenas de KB no pacote de TODO usuário por uma língua
-    // que ninguém pode escolher. A carga entra com o leitor (fatia 4 do PROG-022).
+    // que ninguém pode escolher. A carga entra pelo leitor (fatia 4 do PROG-022),
+    // e só para os idiomas cujo nível deixa aparecer.
     const importadores: string[] = [];
+    const catalogosImportados: string[] = [];
     const varrer = (pasta: string) => {
       for (const entrada of readdirSync(pasta, { withFileTypes: true })) {
         if (entrada.name === "node_modules" || entrada.name.startsWith(".")) continue;
         const caminho = join(pasta, entrada.name);
         if (entrada.isDirectory()) varrer(caminho);
         else if (/\.(ts|tsx|js|mjs)$/.test(entrada.name) && !/\.test\./.test(entrada.name)) {
-          if (/from\s+["'][^"']*i18n\/traducoes\//.test(readFileSync(caminho, "utf8"))) {
-            importadores.push(relative(RAIZ, caminho));
-          }
+          const fonte = readFileSync(caminho, "utf8");
+          // Relativo (`./traducoes/en.json`, no leitor) ou pelo alias
+          // (`@/lib/i18n/traducoes/en.json`): os dois terminam igual.
+          const imports = [...fonte.matchAll(/from\s+["'][^"']*traducoes\/([^"'/]+)\.json["']/g)];
+          if (imports.length === 0) continue;
+          if (relative(RAIZ, caminho) !== LEITOR) importadores.push(relative(RAIZ, caminho));
+          for (const m of imports) catalogosImportados.push(m[1]!);
         }
       }
     };
     for (const area of ["app", "components", "lib", "hooks", "workers"]) varrer(join(RAIZ, area));
-    expect(importadores).toEqual([]);
+    expect(importadores, "código de produto fora do leitor importando catálogo").toEqual([]);
+
+    const emConstrucao = catalogosImportados.filter((codigo) =>
+      REGISTRO_DE_IDIOMAS.some((idioma) => idioma.codigo === codigo && idioma.nivel === "em_construcao"),
+    );
+    expect(emConstrucao, "o leitor importa catálogo de idioma que ainda não aparece").toEqual([]);
+
+    // Guarda do instrumento: o leitor existe e importa ao menos um catálogo.
+    expect(catalogosImportados.length).toBeGreaterThan(0);
   });
 });

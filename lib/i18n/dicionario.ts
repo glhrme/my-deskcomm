@@ -32,9 +32,20 @@
  * do que estava.
  */
 import type { Idioma } from "./idiomas";
+import en from "./traducoes/en.json";
 
 /** `pt-BR` não aparece: é a chave. Só o que DIFERE precisa de linha. */
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
+
+/**
+ * Os catálogos planos (`lib/i18n/traducoes/<codigo>.json`, texto em português
+ * como chave) dos idiomas que APARECEM. Um idioma `em_construcao` não entra
+ * aqui: importá-lo poria o arquivo no pacote de todo usuário por uma língua
+ * que ninguém pode escolher — `tests/unit/catalogo-de-idioma-tem-forma` vigia.
+ * O inglês mora só no catálogo; o espanhol, no `DICIONARIO` abaixo. `traduzir`
+ * consulta os dois, nessa ordem, e cai no português.
+ */
+const CATALOGOS: Partial<Record<Exclude<Idioma, "pt-BR">, Record<string, string>>> = { en };
 
 export const DICIONARIO: Traducoes = {
   "Configure a assinatura da fonte antes de autorizar IA. Para remover a assinatura, desligue primeiro a autorização de IA.": { es: "Configura la firma de la fuente antes de autorizar IA. Para quitar la firma, desactiva primero la autorización de IA." },
@@ -14738,5 +14749,15 @@ export const DICIONARIO: Traducoes = {
  */
 export function traduzir(texto: string, idioma: Idioma): string {
   if (idioma === "pt-BR") return texto;
-  return DICIONARIO[texto]?.[idioma] ?? texto;
+  return DICIONARIO[texto]?.[idioma] ?? CATALOGOS[idioma]?.[texto] ?? texto;
+}
+
+/**
+ * Esta chave tem tradução PRÓPRIA neste idioma? É o que os gates de cobertura
+ * perguntam: `traduzir(k) !== k` não serve, porque "Status" traduzido para
+ * "Status" é legítimo e não é buraco.
+ */
+export function temTraducao(texto: string, idioma: Idioma): boolean {
+  if (idioma === "pt-BR") return true;
+  return Boolean(DICIONARIO[texto]?.[idioma] ?? CATALOGOS[idioma]?.[texto]);
 }
